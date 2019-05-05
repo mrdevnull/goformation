@@ -2,15 +2,40 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
+	"github.com/awslabs/goformation"
 	"github.com/awslabs/goformation/cloudformation"
 	"github.com/awslabs/goformation/cloudformation/resources"
 )
 
-func main() {
+func unmarshal() {
 
+	template, err := goformation.Open("template.yaml")
+	if err != nil {
+		log.Fatalf("There was an error processing the template: %s", err)
+	}
+
+	function, error := template.GetAWSEC2VPCWithName("myVPC")
+
+	if error != nil {
+		log.Fatalf("There was an error processing the function: %s", err)
+	}
+
+	log.Printf("Found a %s\n\n", function.AWSCloudFormationType())
+
+	yaml, error := template.YAML()
+	if error != nil {
+		fmt.Printf("Failed to generate YAML: %s\n", error)
+	} else {
+		fmt.Printf("%s\n", string(yaml))
+	}
+
+}
+
+func marshal() {
 	// Create a new CloudFormation template
 	template := cloudformation.NewTemplate()
 
@@ -41,5 +66,12 @@ func main() {
 	} else {
 		fmt.Printf("%s\n", string(y))
 	}
+}
+
+func main() {
+
+	marshal()
+
+	unmarshal()
 
 }
