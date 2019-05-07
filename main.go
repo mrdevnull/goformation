@@ -50,6 +50,17 @@ func marshal() {
 		Protocol: "email",
 		Endpoint: "some.email@example.com",
 	}
+  
+  template.Resources["MyVPC"] = &resources.AWSEC2VPC{
+    CidrBlock: "10.0.0.0/16",
+    EnableDnsHostnames: false,
+    EnableDnsSupport: false,
+  }
+  
+  template.Resources["MySubnet"] = &resources.AWSEC2Subnet{
+    CidrBlock: "10.0.10.0/24",
+    VpcId: cloudformation.Ref("MyVPC"),
+  }
 
 	// Let's see the JSON AWS CloudFormation template
 	j, err := template.JSON()
