@@ -2,18 +2,17 @@ package main
 
 import (
 	"fmt"
-	"log"
-	"strconv"
-	"time"
-
 	"github.com/awslabs/goformation"
 	"github.com/awslabs/goformation/cloudformation"
 	"github.com/awslabs/goformation/cloudformation/resources"
+	"github.com/davecgh/go-spew/spew"
+	"log"
 )
 
 func unmarshal() {
 
-	template, err := goformation.Open("template.yaml")
+	template, err := goformation.Open("template.json")
+	spew.Dump(template)
 	if err != nil {
 		log.Fatalf("There was an error processing the template: %s", err)
 	}
@@ -26,30 +25,17 @@ func unmarshal() {
 
 	log.Printf("Found a %s\n\n", function.AWSCloudFormationType())
 
-	yaml, err := template.YAML()
+	json, err := template.JSON()
 	if err != nil {
-		fmt.Printf("Failed to generate YAML: %s\n", err)
+		fmt.Printf("Failed to generate JSON: %s\n", err)
 	} else {
-		fmt.Printf("%s\n", string(yaml))
+		fmt.Printf("%s\n", string(json))
 	}
 
 }
 
 func marshal() {
-	// Create a new CloudFormation template
 	template := cloudformation.NewTemplate()
-
-	// Create an Amazon SNS topic, with a unique name based off the current timestamp
-	template.Resources["MyTopic"] = &resources.AWSSNSTopic{
-		TopicName: "my-topic-" + strconv.FormatInt(time.Now().Unix(), 10),
-	}
-
-	// Create a subscription, connected to our topic, that forwards notifications to an email address
-	template.Resources["MyTopicSubscription"] = &resources.AWSSNSSubscription{
-		TopicArn: cloudformation.Ref("MyTopic"),
-		Protocol: "email",
-		Endpoint: "some.email@example.com",
-	}
 
 	template.Resources["HoneyPotVPC"] = &resources.AWSEC2VPC{
 		CidrBlock:          "10.0.0.0/16",
@@ -57,7 +43,9 @@ func marshal() {
 		EnableDnsSupport:   false,
 	}
 
-	template.Resources["HoneyPotSubnet"] = &resources.AWSEC2Subnet{
+	spew.Dump(template)
+
+	template.Resources["LoadBalancerSubnet"] = &resources.AWSEC2Subnet{
 		AssignIpv6AddressOnCreation: false,
 		AvailabilityZone:            "",
 		CidrBlock:                   "10.0.10.0/24",
@@ -67,7 +55,7 @@ func marshal() {
 		VpcId:                       cloudformation.Ref("HoneyPotVPC"),
 	}
 
-	template.Resources["BastianSubnet"] = &resources.AWSEC2Subnet{
+	template.Resources["HoneyPotSubnet"] = &resources.AWSEC2Subnet{
 		AssignIpv6AddressOnCreation: false,
 		AvailabilityZone:            "",
 		CidrBlock:                   "10.0.20.0/24",
@@ -77,7 +65,101 @@ func marshal() {
 		VpcId:                       cloudformation.Ref("HoneyPotVPC"),
 	}
 
-	var egress = []resources.AWSEC2SecurityGroup_Egress{
+	template.Resources["BastianSubnet"] = &resources.AWSEC2Subnet{
+		AssignIpv6AddressOnCreation: false,
+		AvailabilityZone:            "",
+		CidrBlock:                   "10.0.30.0/24",
+		Ipv6CidrBlock:               "",
+		MapPublicIpOnLaunch:         false,
+		Tags:                        nil,
+		VpcId:                       cloudformation.Ref("HoneyPotVPC"),
+	}
+
+	loadBalancerEgress := []resources.AWSEC2SecurityGroup_Egress{
+		{
+			CidrIp:                     "0.0.0.0/0",
+			CidrIpv6:                   "",
+			Description:                "",
+			DestinationPrefixListId:    "",
+			DestinationSecurityGroupId: "",
+			FromPort:                   0,
+			IpProtocol:                 "",
+			ToPort:                     0,
+		},
+	}
+	loafBalancerIngress := []resources.AWSEC2SecurityGroup_Ingress{
+		{
+			CidrIp:                     "0.0.0.0/0",
+			CidrIpv6:                   "",
+			Description:                "",
+			FromPort:                   22,
+			IpProtocol:                 "",
+			SourcePrefixListId:         "",
+			SourceSecurityGroupId:      "",
+			SourceSecurityGroupName:    "",
+			SourceSecurityGroupOwnerId: "",
+			ToPort:                     2222,
+		},
+	}
+
+	template.Resources["LoadBalancerSecurityGroup"] = &resources.AWSEC2SecurityGroup{
+		GroupDescription:     "",
+		GroupName:            "",
+		SecurityGroupEgress:  loadBalancerEgress,
+		SecurityGroupIngress: loafBalancerIngress,
+		Tags:                 nil,
+		VpcId:                cloudformation.Ref("HoneyPotVPC"),
+	}
+
+	honeyPotEgress := []resources.AWSEC2SecurityGroup_Egress{
+		{
+			CidrIp:                     "0.0.0.0/0",
+			CidrIpv6:                   "",
+			Description:                "",
+			DestinationPrefixListId:    "",
+			DestinationSecurityGroupId: "",
+			FromPort:                   0,
+			IpProtocol:                 "",
+			ToPort:                     0,
+		},
+	}
+	honeyPotIngress := []resources.AWSEC2SecurityGroup_Ingress{
+		{
+			CidrIp:                     "",
+			CidrIpv6:                   "",
+			Description:                "",
+			FromPort:                   2222,
+			IpProtocol:                 "",
+			SourcePrefixListId:         "",
+			SourceSecurityGroupId:      cloudformation.Ref("LoadBalancerSecurityGroup"),
+			SourceSecurityGroupName:    cloudformation.Ref("LoadBalancerSecurityGroup"),
+			SourceSecurityGroupOwnerId: cloudformation.Ref("LoadBalancerSecurityGroup"),
+			ToPort:                     2222,
+		},
+		{
+			CidrIp:                     "",
+			CidrIpv6:                   "",
+			Description:                "",
+			FromPort:                   22,
+			IpProtocol:                 "",
+			SourcePrefixListId:         "",
+			SourceSecurityGroupId:      cloudformation.Ref("BastionSecurityGroup"),
+			SourceSecurityGroupName:    cloudformation.Ref("BastionSecurityGroup"),
+			SourceSecurityGroupOwnerId: cloudformation.Ref("BastionSecurityGroup"),
+			ToPort:                     22,
+		},
+	}
+
+	template.Resources["HoneyPotSecurityGroup"] = &resources.AWSEC2SecurityGroup{
+		GroupDescription:     "",
+		GroupName:            "",
+		SecurityGroupEgress:  honeyPotEgress,
+		SecurityGroupIngress: honeyPotIngress,
+		Tags:                 nil,
+		VpcId:                cloudformation.Ref("HoneyPotVPC"),
+	}
+
+	bastionEgress := []resources.AWSEC2SecurityGroup_Egress{
 		{
 			CidrIp:                     "",
 			CidrIpv6:                   "",
@@ -89,51 +171,91 @@ func marshal() {
 			ToPort:                     0,
 		},
 	}
-	ingress := []resources.AWSEC2SecurityGroup_Ingress{
+	bastionIngress := []resources.AWSEC2SecurityGroup_Ingress{
 		{
 			CidrIp:                     "",
 			CidrIpv6:                   "",
 			Description:                "",
-			FromPort:                   0,
+			FromPort:                   22,
 			IpProtocol:                 "",
 			SourcePrefixListId:         "",
 			SourceSecurityGroupId:      "",
 			SourceSecurityGroupName:    "",
 			SourceSecurityGroupOwnerId: "",
-			ToPort:                     0,
+			ToPort:                     22,
 		},
-	}
-
-	template.Resources["HoneyPotSecurityGroup"] = &resources.AWSEC2SecurityGroup{
-		GroupDescription:     "",
-		GroupName:            "",
-		SecurityGroupEgress:  egress,
-		SecurityGroupIngress: ingress,
-		Tags:                 nil,
-		VpcId:                "",
 	}
 
 	template.Resources["BastionSecurityGroup"] = &resources.AWSEC2SecurityGroup{
 		GroupDescription:     "",
 		GroupName:            "",
-		SecurityGroupEgress:  nil,
-		SecurityGroupIngress: nil,
+		SecurityGroupEgress:  bastionEgress,
+		SecurityGroupIngress: bastionIngress,
 		Tags:                 nil,
 		VpcId:                cloudformation.Ref("HoneyPotVPC"),
 	}
 
-	// Let's see the JSON AWS CloudFormation template
-	j, err := template.JSON()
-	if err != nil {
-		fmt.Printf("Failed to generate JSON: %s\n", err)
-	} else {
-		fmt.Printf("%s\n", string(j))
+	template.Resources["InternetGateway"] = &resources.AWSEC2InternetGateway{
+		Tags: nil,
 	}
 
-	// and also the YAML AWS CloudFormation template
+	template.Resources["InternetGatewayAttachment"] = &resources.AWSEC2VPCGatewayAttachment{
+		InternetGatewayId: cloudformation.Ref("InternetGateway"),
+		VpcId:             cloudformation.Ref("HoneyPotVPC"),
+		VpnGatewayId:      "",
+	}
+
+	var eip = resources.AWSEC2EIP{
+		Domain:         "vpc",
+		InstanceId:     "",
+		PublicIpv4Pool: "",
+	}
+
+	eip.SetDependsOn([]string{"InternetGatewayAttachment"})
+
+	template.Resources["NATEIP"] = &eip
+
+	template.Resources["NATGateway"] = &resources.AWSEC2NatGateway{
+		AllocationId: cloudformation.GetAtt("NATEIP", "AllocationId"),
+		SubnetId:     cloudformation.Ref("HoneyPotSubnet"),
+		Tags:         nil,
+	}
+
+	template.Resources["RouteTable"] = &resources.AWSEC2RouteTable{
+		Tags:  nil,
+		VpcId: cloudformation.Ref("HoneyPotVPC"),
+	}
+
+	template.Resources["Route"] = &resources.AWSEC2Route{
+		DestinationCidrBlock:        "0.0.0.0/0",
+		DestinationIpv6CidrBlock:    "",
+		EgressOnlyInternetGatewayId: "",
+		GatewayId:                   "",
+		InstanceId:                  "",
+		NatGatewayId:                cloudformation.Ref("NATGateway"),
+		NetworkInterfaceId:          "",
+		RouteTableId:                cloudformation.Ref("RouteTable"),
+		VpcPeeringConnectionId:      cloudformation.ImportValue(cloudformation.Sub(("${NetworkStackNameParameter}-SecurityGroupID"))),
+	}
+
+	template.Outputs["BastianSubnet"] = map[string]interface{}{
+		"Description": "Bastion Subnet",
+		"Value": cloudformation.Ref("BastionSubnet"),
+		"Export": map[string]interface{}{
+			"Name": cloudformation.Sub("${AWS::StackName}-SubnetID"),
+		},
+	}
+
 	y, err := template.YAML()
 	if err != nil {
 		fmt.Printf("Failed to generate YAML: %s\n", err)
+	} else {
+		fmt.Printf("%s\n", string(y))
+	}
+
+	y, err = template.JSON()
+	if err != nil {
+		fmt.Printf("Failed to generate JSON: %s\n", err)
 	} else {
 		fmt.Printf("%s\n", string(y))
 	}
@@ -143,6 +265,6 @@ func main() {
 
 	marshal()
 
-	unmarshal()
+	//unmarshal()
 
 }
